@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ออฟฟิศหรรษา AR | ฝนตกคำศัพท์ภาษาจีน</title>
+<link href="https://fonts.googleapis.com/css2?family=Mali:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
+<style>
+:root{--blue:#3B82F6;--orange:#FB923C;--ink:#1e3a8a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;font-family:Mali,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);background:#dbeafe}
+#v{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);opacity:0;z-index:0}
+#bg{position:fixed;inset:0;z-index:1;background:linear-gradient(160deg,rgba(219,234,254,.6),rgba(255,237,213,.52));pointer-events:none}
+#bg span{position:absolute;font-size:clamp(34px,6vw,64px);opacity:.5}
+#bg .desk{left:0;right:0;bottom:0;height:9vh;background:linear-gradient(180deg,rgba(251,146,60,.25),rgba(251,146,60,.48))}
+canvas{position:fixed;inset:0;z-index:2;touch-action:none}
+.glass{background:rgba(255,255,255,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1.5px solid rgba(255,255,255,.9);border-radius:28px;box-shadow:0 10px 30px rgba(59,130,246,.2),inset 0 2px 6px rgba(255,255,255,.9)}
+.hidden{display:none!important}
+#hud{position:fixed;inset:0 0 auto 0;z-index:3;padding:12px;pointer-events:none}
+.pill{padding:.35rem 1rem;font-weight:700;font-size:clamp(15px,2.6vw,22px);border-radius:999px;pointer-events:auto}
+#mission{margin:10px auto 0;max-width:min(92vw,660px);text-align:center;padding:.6rem 1.2rem;font-weight:700;font-size:clamp(18px,3.2vw,28px);animation:pop .45s cubic-bezier(.3,1.6,.5,1);pointer-events:auto}
+#mission small{display:block;font-size:.55em;font-weight:500;color:#c2410c}
+.scr{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:1rem;overflow:auto}
+.panel{padding:1.8rem 1.5rem;max-width:580px;width:100%;text-align:center;animation:pop .6s cubic-bezier(.3,1.6,.5,1)}
+h1{font-size:clamp(28px,6vw,44px);line-height:1.1;margin:.2rem 0;color:var(--blue);text-shadow:0 3px 0 #fff,0 6px 12px rgba(59,130,246,.3)}
+.sub{color:#c2410c;font-weight:700;margin:.2rem 0 1rem}
+.jelly{font:700 1.1rem Mali,sans-serif;color:#fff;padding:.75rem 1.8rem;border:0;border-radius:999px;cursor:pointer;background:linear-gradient(180deg,#60a5fa,#3B82F6);box-shadow:inset 0 4px 6px rgba(255,255,255,.55),inset 0 -6px 10px rgba(30,64,175,.3),0 7px 0 #1d4ed8,0 14px 22px rgba(59,130,246,.35);transition:transform .12s,box-shadow .12s;margin:.35rem}
+.jelly.or{background:linear-gradient(180deg,#fdba74,#FB923C);box-shadow:inset 0 4px 6px rgba(255,255,255,.55),inset 0 -6px 10px rgba(154,52,18,.3),0 7px 0 #ea580c,0 14px 22px rgba(251,146,60,.35)}
+.jelly:hover{animation:jig .5s}
+.jelly:active{transform:translateY(6px) scale(1.04,.95);box-shadow:inset 0 4px 6px rgba(255,255,255,.5),0 1px 0 #1d4ed8}
+.chips{display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;margin:.4rem 0 .9rem}
+.chips button{font:700 .95rem Mali,sans-serif;padding:.5rem 1rem;border-radius:999px;border:2px solid #bfdbfe;background:rgba(255,255,255,.8);color:var(--ink);cursor:pointer;transition:transform .15s}
+.chips button.on{background:var(--orange);border-color:#fff;color:#fff;transform:scale(1.05);box-shadow:0 4px 12px rgba(251,146,60,.5)}
+.lbl{font-weight:700;text-align:left;margin-top:.5rem}
+.how{display:flex;justify-content:center;gap:.6rem;margin:.6rem 0 1rem;font-weight:700;font-size:.9rem}
+.how div{flex:1;padding:.5rem .3rem;border-radius:18px;background:rgba(255,255,255,.8)}
+.how b{display:block;font-size:1.8rem}
+.cert{margin-top:1rem;padding:1rem;border:3px dashed var(--orange);border-radius:20px;background:rgba(255,255,255,.85)}
+.cert input{font:700 1.2rem Mali,sans-serif;text-align:center;border:0;border-bottom:3px solid var(--blue);background:transparent;color:var(--ink);width:80%;outline:0;padding:.2rem}
+.stat{display:flex;justify-content:space-around;margin:1rem 0;font-weight:700}
+.stat b{display:block;font-size:2rem;color:var(--blue)}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9;max-width:92vw;padding:.7rem 1.2rem;text-align:center;font-weight:700;transition:opacity .4s,transform .4s}
+#toast.off{opacity:0;transform:translate(-50%,30px);pointer-events:none}
+@keyframes pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes jig{0%,100%{transform:scale(1)}40%{transform:scale(1.08,.94)}70%{transform:scale(.97,1.05)}}
+</style>
+</head>
+<body>
+<video id="v" playsinline muted></video>
+<div id="bg"><div class="desk"></div><span style="left:5%;top:62%">🪴</span><span style="right:6%;top:58%">🖥️</span><span style="left:12%;top:16%">🖼️</span><span style="right:10%;top:14%">🕐</span><span style="left:30%;bottom:3%">☕</span><span style="right:28%;bottom:3%">🗂️</span></div>
+<canvas id="c"></canvas>
+
+<!-- HUD แสดงสถานะระหว่างเล่น -->
+<div id="hud" class="hidden">
+  <div class="flex justify-between items-center gap-2">
+    <div class="flex gap-2">
+      <div class="pill glass text-blue-900">🏆 <span id="hs">0</span>/100</div>
+      <div class="pill glass">🔥 <span id="hc">0</span></div>
+      <div class="pill glass">⏱️ <span id="ht">60</span></div>
+    </div>
+    <button class="pill glass bg-orange-500 text-white font-bold cursor-pointer hover:bg-orange-600 transition" id="bAnsHud">📖 ดูเฉลยคำศัพท์</button>
+  </div>
+  <div id="mission" class="glass"></div>
+</div>
+
+<!-- หน้าเมนูหลัก -->
+<section id="menu" class="scr"><div class="panel glass">
+  <div class="text-6xl">🌧️🧺</div>
+  <h1>ฝนตกคำศัพท์ออฟฟิศ AR</h1>
+  <div class="sub">คำศัพท์ภาษาจีนออฟฟิศ 3 หมวดหมู่ (สถานที่/เอกสาร/การสื่อสาร)</div>
+  <div class="how"><div><b>👐</b>มือ 2 ข้าง<br>จุดส้มจับง่าย</div><div><b>🌧️</b>อักษรจีนโปรย<br>เลือกให้ตรงโจทย์</div><div><b>🧺</b>ลากใส่ตะกร้า<br>เพื่อรับคะแนน</div></div>
+  <button class="jelly" id="bPlay">เริ่มเล่นเลย</button>
+  <button class="jelly or" id="bGrammar">การตั้งค่าเกม</button>
+  <button class="jelly bg-emerald-600" id="bAnsMenu">📖 ดูคำศัพท์ทั้งหมด</button>
+</div></section>
+
+<!-- หน้าการตั้งค่าโหมด -->
+<section id="grammarMode" class="scr hidden"><div class="panel glass">
+  <h1 style="font-size:2rem">⚙️ ตั้งค่าเกม</h1>
+  <div class="lbl">ระดับความยาก (เวลา)</div>
+  <div class="chips" data-k="diff"><button data-v="easy">ง่าย (90s)</button><button data-v="mid" class="on">ปานกลาง (70s)</button><button data-v="hard">ยาก (55s)</button></div>
+  <div class="lbl">ระเบิดเอกสารด่วน 💣</div>
+  <div class="chips" data-k="bomb"><button data-v="1" class="on">เปิด</button><button data-v="0">ปิด</button></div>
+  <button class="jelly" id="bGo">เริ่มเล่นเลย</button>
+  <button class="jelly or" id="bBack">กลับเมนูหลัก</button>
+</div></section>
+
+<!-- หน้าสรุปผลการเล่น -->
+<section id="result" class="scr hidden"><div class="panel glass max-w-xl max-h-[90vh] overflow-y-auto">
+  <div class="flex justify-center items-center gap-3">
+    <!-- ภาพตัวละครเป่าแตรฉลองเข้าเส้นชัย (อัปเดตตาม URL ของคุณเรียบร้อยแล้ว) -->
+    <img id="cheerImg" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRmhp-UAgvW5mREvFdiNIBJWfA499sKulCcnn8pbA3Qs0Yo2Iw&s" 
+         onerror="this.style.display='none'; document.getElementById('svgFallback').classList.remove('hidden');" 
+         class="w-24 h-24 object-contain animate-bounce" alt="Cheering Boy">
+    
+    <!-- SVG ตัวละครสำรองคุณภาพสูง (จะแสดงผลอัตโนมัติหากรูปด้านบนโหลดไม่ได้) -->
+    <div id="svgFallback" class="hidden w-24 h-24 animate-bounce">
+      <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md">
+        <circle cx="50" cy="50" r="45" fill="#fef08a"/>
+        <!-- หัวและหน้า -->
+        <circle cx="45" cy="45" r="28" fill="#fde047"/>
+        <circle cx="36" cy="40" r="4" fill="#1e3a8a"/>
+        <circle cx="52" cy="40" r="4" fill="#1e3a8a"/>
+        <path d="M 35 52 Q 44 62 53 52" stroke="#1e3a8a" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <!-- แก้มแดง -->
+        <circle cx="30" cy="46" r="4" fill="#f87171" opacity="0.6"/>
+        <circle cx="58" cy="46" r="4" fill="#f87171" opacity="0.6"/>
+        <!-- แตรเชียร์ฉลอง -->
+        <polygon points="52,48 85,25 90,45" fill="#ea580c"/>
+        <ellipse cx="87.5" cy="35" rx="3" ry="10" fill="#f97316"/>
+        <!-- โน้ตดนตรี -->
+        <text x="75" y="20" font-size="16" fill="#2563eb">🎵</text>
+        <text x="55" y="15" font-size="14" fill="#16a34a">🎶</text>
+      </svg>
+    </div>
+
+    <div>
+      <h1 style="font-size:1.8rem" id="rt">จบการแข่งขันแล้ว! 🏁</h1>
+      <div id="evalMsg" class="text-base font-bold text-orange-600 mt-1"></div>
+    </div>
+  </div>
+
+  <div class="stat my-3">
+    <div><b id="rs">0</b>/ 100 คะแนน</div>
+    <div><b id="ra">0%</b>ความแม่นยำ</div>
+    <div><b id="rc">0</b>คอมโบสูงสุด</div>
+  </div>
+
+  <!-- สรุปผลข้อที่ถูกและผิดแบบการแข่งขัน -->
+  <div class="cert text-left max-h-48 overflow-y-auto my-2 p-3 bg-white/90">
+    <div class="font-bold text-center border-b pb-1 mb-2 text-blue-900">📊 สรุปประวัติการตอบ (Match History)</div>
+    <div id="matchHistory" class="space-y-1 text-xs sm:text-sm"></div>
+  </div>
+
+  <div class="cert my-2">
+    <div>🏅 ประกาศนียบัตร 结业证书</div>
+    <input id="nm" maxlength="24" placeholder="พิมพ์ชื่อของคุณที่นี่">
+    <div class="mt-1 text-sm"><span id="rstar"></span></div>
+  </div>
+
+  <div class="mt-3">
+    <button class="jelly bg-emerald-600" id="bAnsResult">📖 ดูคลังคำศัพท์</button>
+    <button class="jelly" id="bAgain">เล่นอีกครั้ง</button>
+    <button class="jelly or" id="bMenu">กลับเมนู</button>
+  </div>
+</div></section>
+
+<!-- หน้าเฉลยภาษาจีน / Answer Key Modal -->
+<section id="answerModal" class="scr hidden"><div class="panel glass max-w-2xl text-left max-h-[85vh] overflow-y-auto">
+  <div class="flex justify-between items-center mb-4 border-b pb-2">
+    <h2 class="text-2xl font-bold text-blue-700">📖 รายการคำศัพท์ภาษาจีนออฟฟิศ (ตามแฟลชการ์ด)</h2>
+    <button id="bCloseAns" class="text-2xl font-bold text-gray-500 hover:text-red-500">✖</button>
+  </div>
+
+  <div class="space-y-4 text-xs sm:text-sm">
+    <!-- หมวดการติดต่อสื่อสารและการบริหารงาน -->
+    <div class="p-3 bg-cyan-50/90 rounded-xl border border-cyan-200">
+      <h3 class="font-bold text-cyan-800 text-sm mb-1">🔷 1. หมวดการติดต่อสื่อสารและการบริหารงาน (ภาพสีฟ้า)</h3>
+      <div class="grid grid-cols-2 gap-1.5">
+        <div>• <b>联系</b> (liánxì) - ติดต่อ</div>
+        <div>• <b>回复</b> (huífù) - ตอบกลับ</div>
+        <div>• <b>转发</b> (zhuǎnfā) - ส่งต่อ</div>
+        <div>• <b>确认</b> (quèrèn) - ยืนยัน</div>
+        <div>• <b>讨论</b> (tǎolùn) - อภิปราย</div>
+        <div>• <b>建议</b> (jiànyì) - ข้อเสนอแนะ</div>
+        <div>• <b>项目</b> (xiàngmù) - โครงการ</div>
+        <div>• <b>计划</b> (jìhuà) - แผนงาน</div>
+        <div>• <b>截止日期</b> (jiézhǐ rìqī) - กำหนดส่ง</div>
+        <div>• <b>目标</b> (mùbiāo) - เป้าหมาย</div>
+      </div>
+    </div>
+
+    <!-- หมวดสถานที่และแผนก -->
+    <div class="p-3 bg-red-50/90 rounded-xl border border-red-200">
+      <h3 class="font-bold text-red-800 text-sm mb-1">🔴 2. หมวดสถานที่และแผนกงาน (ภาพสีแดง)</h3>
+      <div class="grid grid-cols-2 gap-1.5">
+        <div>• <b>办公室</b> (bàngǒngshì) - สำนักงาน</div>
+        <div>• <b>公司</b> (gōngsī) - บริษัท</div>
+        <div>• <b>会议室</b> (Huìyìshì) - ห้องประชุม</div>
+        <div>• <b>部门</b> (bùmén) - แผนก</div>
+        <div>• <b>管理部</b> (guǎnlǐ bù) - ฝ่ายบริหาร</div>
+        <div>• <b>市场部</b> (shìchǎng bù) - ฝ่ายการตลาด</div>
+        <div>• <b>人事部</b> (rénshì bù) - ฝ่ายบุคคล (HR)</div>
+        <div>• <b>会计部</b> (kuàijì bù) - ฝ่ายบัญชี</div>
+        <div>• <b>销售部</b> (xiāoshòu bù) - ฝ่ายขาย / เซลล์</div>
+        <div>• <b>技术部</b> (jìshù bù) - ฝ่ายไอที / เทคนิค</div>
+      </div>
+    </div>
+
+    <!-- หมวดบุคคลและตำแหน่งงาน -->
+    <div class="p-3 bg-amber-50/90 rounded-xl border border-amber-200">
+      <h3 class="font-bold text-amber-800 text-sm mb-1">🟡 3. หมวดบุคคลและตำแหน่งงาน (ภาพสีเหลือง)</h3>
+      <div class="grid grid-cols-2 gap-1.5">
+        <div>• <b>同事</b> (tóngshì) - เพื่อนร่วมงาน</div>
+        <div>• <b>客户</b> (kèhù) - ลูกค้า</div>
+        <div>• <b>首席执行官</b> (shǒu xī zhí xíng guān) - CEO</div>
+        <div>• <b>总裁</b> (zǒngcái) - ประธาน</div>
+        <div>• <b>副总裁</b> (fù zǒngcái) - รองประธาน</div>
+        <div>• <b>企业家</b> (qǐ yè jiā) - นักธุรกิจ</div>
+        <div>• <b>部门主管</b> (bùmén zhǔguǎn) - หัวหน้าแผนก</div>
+        <div>• <b>经理</b> (jīnglǐ) - ผู้จัดการ</div>
+        <div>• <b>副经理</b> (fù jīnglǐ) - รองผู้จัดการ</div>
+        <div>• <b>员工</b> (yuángōng) - พนักงาน</div>
+      </div>
+    </div>
+
+    <!-- หมวดเอกสารและอุปกรณ์ -->
+    <div class="p-3 bg-emerald-50/90 rounded-xl border border-emerald-200">
+      <h3 class="font-bold text-emerald-800 text-sm mb-1">🟢 4. หมวดเอกสารและอุปกรณ์ (ภาพสีเขียว)</h3>
+      <div class="grid grid-cols-2 gap-1.5">
+        <div>• <b>文件</b> (wénjiàn) - เอกสาร</div>
+        <div>• <b>资料</b> (zīliào) - ข้อมูล / เอกสารประกอบ</div>
+        <div>• <b>合同</b> (hétong) - สัญญา</div>
+        <div>• <b>报告</b> (bàogào) - รายงาน</div>
+        <div>• <b>表格</b> (biǎogé) - ตาราง / แบบฟอร์ม</div>
+        <div>• <b>附件</b> (fùjiàn) - ไฟล์แนบ</div>
+        <div>• <b>内容</b> (nèiróng) - เนื้อหา</div>
+        <div>• <b>电脑</b> (diànnǎo) - คอมพิวเตอร์</div>
+        <div>• <b>电话</b> (diànhuà) - โทรศัพท์</div>
+        <div>• <b>打印机</b> (dǎyìnjī) - เครื่องถ่ายเอกสาร</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-4 text-center">
+    <button class="jelly" id="bBackFromAns">ตกลง เข้าใจแล้ว</button>
+  </div>
+</div></section>
+
+<div id="toast" class="glass off"></div>
+
+<script>
+const $=s=>document.querySelector(s),rnd=(a,b)=>a+Math.random()*(b-a);
+
+// ---------- ชุดข้อมูลคำศัพท์ออฟฟิศทั้งหมด ถอดแบบตามรูปภาพแฟลชการ์ด 5 ภาพ ----------
+const vocabList = [
+  // 🔷 ภาพสีฟ้า: หมวดการติดต่อสื่อสารและการบริหารงาน
+  { zh: '联系', py: 'liánxì', th: 'ติดต่อ', e: '📲' },
+  { zh: '回复', py: 'huífù', th: 'ตอบกลับ', e: '💬' },
+  { zh: '转发', py: 'zhuǎnfā', th: 'ส่งต่อ', e: '↗️' },
+  { zh: '确认', py: 'quèrèn', th: 'ยืนยัน', e: '☑️' },
+  { zh: '讨论', py: 'tǎolùn', th: 'อภิปราย', e: '🗣️' },
+  { zh: '建议', py: 'jiànyì', th: 'ข้อเสนอแนะ', e: '💡' },
+  { zh: '项目', py: 'xiàngmù', th: 'โครงการ', e: '🎯' },
+  { zh: '计划', py: 'jìhuà', th: 'แผนงาน', e: '🗺️' },
+  { zh: '截止日期', py: 'jiézhǐ rìqī', th: 'กำหนดส่ง', e: '⏳' },
+  { zh: '目标', py: 'mùbiāo', th: 'เป้าหมาย', e: '🚩' },
+
+  // 🔴 ภาพสีแดง: หมวดสถานที่และแผนกงาน
+  { zh: '办公室', py: 'bàngǒngshì', th: 'สำนักงาน', e: '🏢' },
+  { zh: '公司', py: 'gōngsī', th: 'บริษัท', e: '🏬' },
+  { zh: '会议室', py: 'Huìyìshì', th: 'ห้องประชุม', e: '🏛️' },
+  { zh: '部门', py: 'bùmén', th: 'แผนก', e: '🗂️' },
+  { zh: '管理部', py: 'guǎnlǐ bù', th: 'ฝ่ายบริหาร', e: '🕴️' },
+  { zh: '市场部', py: 'shìchǎng bù', th: 'ฝ่ายการตลาด', e: '📈' },
+  { zh: '人事部', py: 'rénshì bù', th: 'ฝ่ายบุคคล (HR)', e: '🔍' },
+  { zh: '会计部', py: 'kuàijì bù', th: 'ฝ่ายบัญชี', e: '🧮' },
+  { zh: '销售部', py: 'xiāoshòu bù', th: 'ฝ่ายขาย / เซลล์', e: '🏷️' },
+  { zh: '技术部', py: 'jìshù bù', th: 'ฝ่ายไอที / เทคนิค', e: '💻' },
+
+  // 🟡 ภาพสีเหลือง: หมวดบุคคลและตำแหน่งงาน
+  { zh: '同事', py: 'tóngshì', th: 'เพื่อนร่วมงาน', e: '👥' },
+  { zh: '客户', py: 'kèhù', th: 'ลูกค้า', e: '🤝' },
+  { zh: '首席执行官', py: 'shǒu xī zhí xíng guān', th: 'CEO', e: '👔' },
+  { zh: '总裁', py: 'zǒngcái', th: 'ประธาน', e: '👩‍💼' },
+  { zh: '副总裁', py: 'fù zǒngcái', th: 'รองประธาน', e: '👨‍💼' },
+  { zh: '企业家', py: 'qǐ yè jiā', th: 'นักธุรกิจ', e: '💼' },
+  { zh: '部门主管', py: 'bùmén zhǔguǎn', th: 'หัวหน้าแผนก', e: '⭐' },
+  { zh: '经理', py: 'jīnglǐ', th: 'ผู้จัดการ', e: '👉' },
+  { zh: '副经理', py: 'fù jīnglǐ', th: 'รองผู้จัดการ', e: '📋' },
+  { zh: '员工', py: 'yuángōng', th: 'พนักงาน', e: '🏃' },
+
+  // 🟢 ภาพสีเขียว: หมวดเอกสารและอุปกรณ์
+  { zh: '文件', py: 'wénjiàn', th: 'เอกสาร', e: '📄' },
+  { zh: '资料', py: 'zīliào', th: 'ข้อมูล / เอกสารประกอบ', e: '📑' },
+  { zh: '合同', py: 'hétong', th: 'สัญญา', e: '📜' },
+  { zh: '报告', py: 'bàogào', th: 'รายงาน', e: '📊' },
+  { zh: '表格', py: 'biǎogé', th: 'ตาราง / แบบฟอร์ม', e: '📋' },
+  { zh: '附件', py: 'fùjiàn', th: 'ไฟล์แนบ', e: '📎' },
+  { zh: '内容', py: 'nèiróng', th: 'เนื้อหา', e: '📚' },
+  { zh: '电脑', py: 'diànnǎo', th: 'คอมพิวเตอร์', e: '🖥️' },
+  { zh: '电话', py: 'diànhuà', th: 'โทรศัพท์', e: '📞' },
+  { zh: '打印机', py: 'dǎyìnjī', th: 'เครื่องถ่ายเอกสาร', e: '🪟' }
+];
+
+// ---------- Audio System (Web Audio API) ----------
+let ac;
+function au(){try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();ac.state=='suspended'&&ac.resume()}catch(e){}}
+function tone(f,d,ty='sine',t0=0,f2,vol=.15){if(!ac)return;const o=ac.createOscillator(),g=ac.createGain(),t=ac.currentTime+t0;o.type=ty;o.frequency.setValueAtTime(f,t);f2&&o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(ac.destination);o.start(t);o.stop(t+d)}
+
+// เสียงแตรเปรียบเสมือนเข้าเส้นชัย (Finish Fanfare Horn Sound)
+function fanfareHorn(){
+  if(!ac) return;
+  const notes = [
+    {f: 392.00, d: 0.15, t: 0},     // G4
+    {f: 523.25, d: 0.15, t: 0.15},  // C5
+    {f: 659.25, d: 0.15, t: 0.30},  // E5
+    {f: 783.99, d: 0.40, t: 0.45},  // G5 (Long)
+    {f: 659.25, d: 0.15, t: 0.90},  // E5
+    {f: 783.99, d: 0.65, t: 1.05}   // G5 (Finish)
+  ];
+  notes.forEach(n => tone(n.f, n.d, 'sawtooth', n.t, n.f * 1.01, 0.22));
+}
+
+const sfx={
+  pick:()=>tone(520,.09,'triangle',0,820),
+  ok:()=>[660,880,1320].forEach((f,i)=>tone(f,.2,'sine',i*.08)),
+  bad:()=>tone(240,.3,'sawtooth',0,90,.1),
+  boom:()=>{tone(130,.45,'square',0,40,.18);tone(320,.25,'sawtooth',0,60,.1)},
+  end:()=>fanfareHorn()
+};
+
+// ---------- Variable Setup ----------
+const cv=$('#c'),cx=cv.getContext('2d'),vd=$('#v');
+let W,H,last=0;
+const FONT = 'Mali, "Noto Sans SC", "PingFang SC", sans-serif';
+
+// Helper Function: วาดสี่เหลี่ยมมุมมน (Rounded Rectangle)
+function rr(x,y,w,h,r){
+  r=Math.min(r,Math.min(w,h)/2);
+  cx.beginPath();
+  cx.moveTo(x+r,y);
+  cx.arcTo(x+w,y,x+w,y+h,r);
+  cx.arcTo(x+w,y+h,x,y+h,r);
+  cx.arcTo(x,y+h,x,y,r);
+  cx.arcTo(x,y,x+w,y,r);
+  cx.closePath();
+}
+
+function rs(){const d=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*d;cv.height=H*d;cx.setTransform(d,0,0,d,0,0)}
+addEventListener('resize',rs);rs();
+
+const cfg={diff:'mid',bomb:true};
+const DIFF={easy:{t:90,gap:1.4,v:60},mid:{t:70,gap:1.0,v:90},hard:{t:55,gap:.7,v:130}};
+const ptr={x:-99,y:-99,down:false,hand:false};
+
+let handsData = []; // เก็บตำแหน่งจุดบนฝ่ามือทั้งสองข้าง
+let S=null,P=[],camOn=false,hands=null,busy=false,prev=false,tt;
+let matchLogs = []; // เก็บบันทึกประวัติข้อที่ถูกและผิด
+
+function show(id){['menu','grammarMode','result','answerModal'].forEach(s=>$('#'+s).classList.toggle('hidden',s!==id))}
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.remove('off');clearTimeout(tt);tt=setTimeout(()=>t.classList.add('off'),5000)}
+function sync(){document.querySelectorAll('.chips').forEach(c=>{const k=c.dataset.k,cur=k=='bomb'?(cfg.bomb?'1':'0'):cfg[k];c.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v==cur))})}
+document.querySelectorAll('.chips').forEach(c=>c.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;cfg[c.dataset.k]=c.dataset.k=='bomb'?b.dataset.v=='1':b.dataset.v;sync()}));sync();
+
+// ---------- Mouse & Touch Fallback ----------
+cv.addEventListener('pointerdown',e=>{if(ptr.hand)return;ptr.x=e.clientX;ptr.y=e.clientY;ptr.down=true;cv.setPointerCapture(e.pointerId)});
+cv.addEventListener('pointermove',e=>{if(ptr.hand)return;ptr.x=e.clientX;ptr.y=e.clientY});
+['pointerup','pointercancel'].forEach(n=>cv.addEventListener(n,()=>{if(!ptr.hand)ptr.down=false}));
+
+// ---------- MediaPipe Multi-Hand Tracking ----------
+function mp(p){const vw=vd.videoWidth||640,vh=vd.videoHeight||480,s=Math.max(W/vw,H/vh);return{x:W-(p.x*vw*s-(vw*s-W)/2),y:p.y*vh*s-(vh*s-H)/2}}
+
+function onRes(r){
+  try {
+    const multiHands=r.multiHandLandmarks;
+    if(!multiHands || multiHands.length === 0){
+      if(ptr.hand){ptr.hand=false;ptr.down=false}
+      handsData = [];
+      return;
+    }
+    ptr.hand = true;
+    handsData = [];
+
+    let isAnyPinch = false;
+    let mainX = 0, mainY = 0;
+
+    multiHands.forEach((l) => {
+      const pts = l.map(mp);
+      const d = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+      const ps = d(l[0], l[9]) || .1;
+      const ratio = [8,12,16,20].reduce((s,i)=>s+d(l[i],l[0]),0)/4/ps;
+      const pinch = ratio < 1.25;
+
+      if (pinch) isAnyPinch = true;
+
+      const palmCenter = [0,5,9,13,17].map(i => pts[i]);
+      const cx = palmCenter.reduce((s,p)=>s+p.x,0)/5;
+      const cy = palmCenter.reduce((s,p)=>s+p.y,0)/5;
+
+      handsData.push({ pts, cx, cy, pinch });
+
+      mainX += cx; mainY += cy;
+    });
+
+    ptr.down = isAnyPinch;
+    ptr.x = mainX / multiHands.length;
+    ptr.y = mainY / multiHands.length;
+
+  } catch(err) {
+    console.warn("MediaPipe Frame Error:", err);
+  }
+}
+
+async function startCam(){
+  if(camOn)return;
+  try{
+    if(!navigator.mediaDevices||!window.Hands)throw 0;
+    vd.srcObject=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1280},height:{ideal:720}}});
+    await vd.play();vd.style.opacity=1;
+    hands=new Hands({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/'+f});
+    hands.setOptions({maxNumHands:2,modelComplexity:0,minDetectionConfidence:.5,minTrackingConfidence:.5});
+    hands.onResults(onRes);camOn=true;feed();
+    toast('กล้องพร้อมแล้ว! เอามือดันหรือหยิบคำศัพท์ใส่ตะกร้าด้านล่างได้เลย');
+  }catch(e){
+    camOn=false;
+    toast('เข้าสู่โหมดเมาส์/สัมผัสหน้าจอ 🖱️');
+  }
+}
+
+async function feed(){
+  if(!camOn)return;
+  if(vd.readyState>=2&&!busy){
+    busy=true;
+    try { await hands.send({image:vd}); } catch(e){}
+    busy=false;
+  }
+  requestAnimationFrame(feed);
+}
+
+// ---------- Game Engine ----------
+function mk(it,k,y){
+  const L=it.t?it.t.length:(it.zh?it.zh.length:0);
+  // ปรับขนาดฟอนต์และการ์ดให้เล็กลง กระทัดรัดขึ้น
+  const fs=L>3?16:20;
+  const w=k=='bomb'?65:Math.max(90, L*fs + 40);
+  S.cards.push({
+    it,k,w,h:k=='bomb'?65:68,fs,
+    x:rnd(w/2+20, W-w/2-20), y:y||-80,
+    v:S.v*rnd(.85, 1.2), rot:0, ph:rnd(0,6), d:false
+  });
+}
+
+function spawnCard(){
+  if(S.bomb && Math.random() < .16){
+    mk({ e: Math.random() < .5 ? '💣' : '🚨', zh: '💣' }, 'bomb');
+    return;
+  }
+
+  if(S.cards.length >= 7) return;
+
+  // มีโอกาส 40% ที่จะสุ่มได้คำตอบที่ถูกต้อง
+  let item;
+  if (Math.random() < 0.40) {
+    item = S.target;
+  } else {
+    item = vocabList[Math.floor(Math.random() * vocabList.length)];
+  }
+
+  mk(item, 'card');
+}
+
+function setTargetWord(){
+  const randIndex = Math.floor(Math.random() * vocabList.length);
+  S.target = vocabList[randIndex];
+  updateMissionUI();
+}
+
+function updateMissionUI(){
+  const el=$('#mission');
+  el.innerHTML=`หัวข้อโจทย์: <span class="text-blue-700 font-bold">ภาษาจีนออฟฟิศ</span> | ภารกิจ: จับคำแปล 👉 <span class="text-orange-600 text-xl font-bold">${S.target.th}</span><small>โปรยตัวอักษรจีนลงมา ดันคำศัพท์ภาษาจีนใส่ตะกร้าด้านล่าง (เต็ม 100 คะแนน)</small>`;
+  el.style.animation='none';void el.offsetWidth;el.style.animation='';
+}
+
+function startGame(){
+  au();const D=DIFF[cfg.diff];
+  S={run:true,t:D.t,gap:D.gap,v:D.v*Math.max(.7,H/700),sp:.4,el:0,score:0,combo:0,best:0,ok:0,bad:0,cards:[],drag:null,bomb:cfg.bomb,target:null};
+  P=[];prev=false;matchLogs=[];
+  ['menu','grammarMode','result','answerModal'].forEach(s=>$('#'+s).classList.add('hidden'));
+  $('#hud').classList.remove('hidden');
+  setTargetWord();
+}
+
+async function play(){
+  $('#bPlay').disabled=true;
+  await startCam();
+  $('#bPlay').disabled=false;
+  startGame();
+}
+
+// ตะกร้าเป้าหมายอยู่ล่างสุดตรงกลางหน้าจอ
+function getBasketZone(){
+  const w = Math.min(260, W * 0.55);
+  const h = 110;
+  return { x: W / 2, y: H - h / 2 - 15, w, h };
+}
+
+function hitBasket(c){
+  const b = getBasketZone();
+  // ขยายรัศมีโซนรับตะกร้า 🧺 ให้ใหญ่ขึ้น จับคำศัพท์ลงตะกร้าง่ายขึ้น
+  return Math.abs(c.x - b.x) < (b.w / 2 + 45) && Math.abs(c.y - b.y) < (b.h / 2 + 45);
+}
+
+function grab(){
+  const targets = handsData.length > 0 ? handsData.map(h=>({x:h.cx,y:h.cy})) : [{x:ptr.x,y:ptr.y}];
+
+  for(let i=S.cards.length-1;i>=0;i--){
+    const c=S.cards[i];
+    // ขยายรัศมีจับการ์ดคำศัพท์ให้คีบง่ายขึ้น ( Hitbox จาก 55 เป็น 90px )
+    const hitW = c.w / 2 + 90;
+    const hitH = c.h / 2 + 90;
+
+    for (const p of targets) {
+      if(Math.abs(p.x-c.x) < hitW && Math.abs(p.y-c.y) < hitH){
+        if(c.k=='bomb'){
+          S.cards.splice(i,1);S.combo=0;S.t-=3;S.bad++;
+          burst(c.x,c.y,0);txt(c.x,c.y,'-3s 💥','#dc2626');sfx.boom();
+          return;
+        }
+        c.d=true;S.drag=c;S.cards.push(S.cards.splice(i,1)[0]);sfx.pick();return;
+      }
+    }
+  }
+}
+
+function drop(){const c=S.drag;if(!c)return;c.d=false;S.drag=null;resolve(c)}
+
+function resolve(c){
+  if(!hitBasket(c)) return;
+
+  S.cards.splice(S.cards.indexOf(c),1);
+  const isCorrect = c.it.zh === S.target.zh;
+
+  // บันทึกประวัติข้อที่ตอบถูกและผิด
+  matchLogs.push({
+    targetTh: S.target.th,
+    userZh: c.it.zh,
+    correctZh: S.target.zh,
+    isCorrect
+  });
+
+  if(isCorrect){
+    S.combo++;S.best=Math.max(S.best,S.combo);S.ok++;
+    // คำนวณคะแนนเต็ม 100 (ข้อละ 10 คะแนน สูงสุด 100)
+    const g=Math.min(10, 100 - S.score);
+    S.score = Math.min(100, S.score + 10);
+    burst(c.x,c.y,1);
+    txt(c.x,c.y-30,'✅ ถูกต้อง! +10','#16a34a');
+    sfx.ok();
+    setTargetWord();
+  }else{
+    S.combo=0;S.bad++;S.t-=2;
+    burst(c.x,c.y,0);
+    txt(c.x,c.y-30,`❌ ผิด! (${c.it.zh})`,'#dc2626');
+    sfx.bad();
+  }
+}
+
+function burst(x,y,good){const s=good?['✨','⭐','🎉','💖']:['💥','❌'];for(let i=0;i<12;i++)P.push({x,y,vx:rnd(-200,200),vy:rnd(-300,30),l:1,t:s[i%s.length],s:rnd(16,28)})}
+function txt(x,y,t,c){P.push({x,y,vx:0,vy:-50,l:1.5,t,s:24,c,tx:1})}
+
+function step(dt){
+  S.el+=dt;S.t-=dt;
+  // เกมจบเมื่อหมดเวลา หรือ ทำคะแนนครบ 100 คะแนนเต็ม
+  if(S.t<=0 || S.score>=100){end();return}
+  S.sp-=dt;if(S.sp<=0){S.sp=S.gap*rnd(.8,1.2);spawnCard()}
+  
+  if(ptr.down&&!prev)grab();
+  if(!ptr.down&&prev)drop();
+  prev=ptr.down;
+
+  for(const c of S.cards){
+    if(c.d){
+      c.x+=(ptr.x-c.x)*.8;
+      c.y+=(ptr.y-c.y)*.8;
+      continue;
+    }
+    // ปิดแรงดัน/แรงเด้งจากฝ่ามือ เพื่อไม่ให้การ์ดเด้งสั่นไปมาเวลาแตะโดน
+    c.vx=0; c.vy=0;
+    c.y+=(c.v)*dt; // โปรยตกลงมาแบบตรงๆ นุ่มนวล
+  }
+
+  // ลบการ์ดที่ตกเลยขอบล่างจอโดยไม่คิดคะแนน (ต้องลากใส่ตะกร้าเท่านั้นถึงคิดคะแนน)
+  S.cards=S.cards.filter(c=>c.d||c.y < H + 80);
+
+  $('#hs').textContent=S.score;$('#hc').textContent=S.combo;
+  const ht=$('#ht');ht.textContent=Math.max(0,Math.ceil(S.t));ht.style.color=S.t<=10?'#dc2626':'';
+}
+
+function end(){
+  S.run=false;S.drag=null;
+  sfx.end(); // เล่นเสียงแตรเป่าเข้าเส้นชัย
+
+  const n=S.ok+S.bad,acc=n?Math.round(S.ok/n*100):0;
+  const finalScore = Math.min(100, S.score);
+
+  $('#rt').textContent = finalScore >= 100 ? 'เข้าเส้นชัยแบบเพอร์เฟกต์! 🏆' : 'เข้าเส้นชัยแล้ว! 🏁';
+  $('#rs').textContent = finalScore;
+  $('#ra').textContent = acc + '%';
+  $('#rc').textContent = S.best;
+
+  // ข้อความประเมินผลตามเกณฑ์คะแนน
+  const evalEl = $('#evalMsg');
+  if(finalScore >= 50){
+    evalEl.textContent = 'เก่งมาก เอาไปเลยสองนิ้วโป้ง 👍👍';
+    evalEl.className = 'text-base font-bold text-emerald-600 mt-1';
+  } else {
+    evalEl.textContent = 'ไม่เป็นไรนะ ครั้งหน้าเอาใหม่ ✌️';
+    evalEl.className = 'text-base font-bold text-orange-600 mt-1';
+  }
+
+  $('#rstar').textContent=finalScore>=80?'⭐⭐⭐ ยอดเยี่ยมระดับพรีเมียม!':finalScore>=50?'⭐⭐ ทำได้ดีเยี่ยม!':'⭐ สู้ต่อไปนะ!';
+
+  // แสดงตารางสรุปผลข้อที่ถูกและผิด
+  const historyContainer = $('#matchHistory');
+  if(matchLogs.length === 0){
+    historyContainer.innerHTML = '<div class="text-center text-gray-400">ไม่มีประวัติการจับคำศัพท์</div>';
+  } else {
+    historyContainer.innerHTML = matchLogs.map((log, idx) => `
+      <div class="flex items-center justify-between p-1.5 rounded ${log.isCorrect ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900'}">
+        <div>
+          <b>ข้อที่ ${idx+1}:</b> ภารกิจ "${log.targetTh}" 
+          ${log.isCorrect ? `<span class="font-bold">(${log.userZh})</span>` : `<span class="line-through text-red-500">(${log.userZh})</span> ➔ <span class="font-bold">${log.correctZh}</span>`}
+        </div>
+        <div class="font-bold">${log.isCorrect ? '✅ ถูก' : '❌ ผิด'}</div>
+      </div>
+    `).join('');
+  }
+
+  $('#hud').classList.add('hidden');show('result');
+}
+
+// ---------- Render Canvas ----------
+// วาดตะกร้า 🧺 แบบใหม่พร้อมเอฟเฟกต์ตอบสนอง
+function drawBasket(){
+  const b = getBasketZone();
+  const hot = S.drag && hitBasket(S.drag);
+  cx.save();
+  cx.translate(b.x, b.y);
+  if(hot) cx.scale(1.12, 1.12);
+
+  cx.shadowColor = hot ? 'rgba(251,146,60,.9)' : 'rgba(59,130,246,.35)';
+  cx.shadowBlur = hot ? 28 : 14;
+
+  rr(-b.w/2, -b.h/2, b.w, b.h, 28);
+  cx.fillStyle = hot ? 'rgba(254,243,199,.96)' : 'rgba(255,255,255,.88)';
+  cx.fill();
+
+  cx.lineWidth = 4;
+  cx.strokeStyle = hot ? '#ea580c' : '#3B82F6';
+  cx.stroke();
+
+  cx.fillStyle = '#1e3a8a';
+  cx.font = '700 36px ' + FONT;
+  cx.textAlign = 'center';
+  cx.textBaseline = 'middle';
+  cx.fillText('🧺', 0, -18);
+
+  cx.font = '700 16px ' + FONT;
+  cx.fillText('หย่อนคำศัพท์ลงตะกร้า 🧺', 0, 15);
+
+  cx.font = '500 13px ' + FONT;
+  cx.fillStyle = '#c2410c';
+  cx.fillText(`ภารกิจ: ${S ? S.target?.th : ''}`, 0, 36);
+
+  cx.restore();
+}
+
+function card(c){
+  cx.save();cx.translate(c.x,c.y);if(c.d)cx.scale(1.1,1.1);
+  cx.textAlign='center';cx.textBaseline='middle';
+  if(c.k=='bomb'){
+    cx.shadowColor='rgba(239,68,68,.6)';cx.shadowBlur=12;cx.fillStyle='rgba(254,226,226,.9)';cx.beginPath();cx.arc(0,0,30,0,7);cx.fill();
+    cx.font='34px '+FONT;cx.fillText(c.it.e,0,2);cx.restore();return;
+  }
+  cx.shadowColor='rgba(59,130,246,.25)';cx.shadowBlur=10;
+  rr(-c.w/2,-c.h/2,c.w,c.h,16);
+  cx.fillStyle='rgba(255,255,255,.95)';cx.fill();
+  cx.lineWidth=2.5;cx.strokeStyle=c.d?'#FB923C':'#3B82F6';cx.stroke();
+  cx.fillStyle='#1e3a8a';
+  if(c.it.e){cx.font='14px '+FONT;cx.fillText(c.it.e,-c.w/2+16,-c.h/2+16)}
+  cx.font='700 '+c.fs+'px '+FONT;cx.fillText(c.it.zh,0,c.it.py?-2:2);
+  if(c.it.py){cx.font='500 10px '+FONT;cx.fillStyle='#c2410c';cx.fillText(c.it.py,0,c.h/2-12)}
+  cx.restore();
+}
+
+// วาดข้อต่อและจุดสีส้มบนฝ่ามือทั้งสองข้าง
+function drawHands(){
+  if(handsData.length === 0 && ptr.x>0 && (ptr.hand||ptr.down)){
+    cx.beginPath();cx.arc(ptr.x,ptr.y,ptr.down?20:35,0,7);
+    cx.fillStyle=ptr.down?'rgba(251,146,60,.7)':'rgba(59,130,246,.3)';cx.fill();
+    return;
+  }
+
+  handsData.forEach(h => {
+    const connections = [
+      [0,1],[1,2],[2,3],[3,4],
+      [0,5],[5,6],[6,7],[7,8],
+      [5,9],[9,10],[10,11],[11,12],
+      [9,13],[13,14],[14,15],[15,16],
+      [13,17],[17,18],[18,19],[19,20],[0,17]
+    ];
+    cx.lineWidth = 3;
+    cx.strokeStyle = 'rgba(251,146,60,0.5)';
+    connections.forEach(([i,j])=>{
+      cx.beginPath();
+      cx.moveTo(h.pts[i].x, h.pts[i].y);
+      cx.lineTo(h.pts[j].x, h.pts[j].y);
+      cx.stroke();
+    });
+
+    h.pts.forEach(p => {
+      cx.beginPath();
+      cx.arc(p.x, p.y, 5, 0, Math.PI*2);
+      cx.fillStyle = '#ea580c';
+      cx.fill();
+    });
+
+    // จุดส้มใจกลางฝ่ามือสำหรับคุมการหยิบ/ดัน
+    cx.beginPath();
+    cx.arc(h.cx, h.cy, h.pinch ? 24 : 36, 0, Math.PI*2);
+    cx.fillStyle = h.pinch ? 'rgba(234, 88, 12, 0.85)' : 'rgba(251, 146, 60, 0.45)';
+    cx.fill();
+    cx.lineWidth = 3;
+    cx.strokeStyle = '#ffffff';
+    cx.stroke();
+  });
+}
+
+function draw(){
+  cx.clearRect(0,0,W,H);
+  if(!S)return;
+  drawBasket();
+  for(const c of S.cards)card(c);
+  for(let i=P.length-1;i>=0;i--){
+    const p=P[i];p.l-=.02;if(p.l<=0){P.splice(i,1);continue}
+    p.x+=p.vx*.016;p.y+=p.vy*.016;
+    cx.globalAlpha=Math.min(1,p.l);cx.font=(p.tx?'700 ':'')+p.s+'px '+FONT;cx.textAlign='center';cx.fillStyle=p.c||'#000';cx.fillText(p.t,p.x,p.y);
+  }
+  cx.globalAlpha=1;
+  drawHands();
+}
+
+function loop(ts){
+  requestAnimationFrame(loop);
+  const dt=Math.min((ts-last)/1000||0,.05);last=ts;
+  if(S&&S.run)step(dt);
+  draw();
+}
+requestAnimationFrame(loop);
+
+// ---------- Event Listeners ----------
+$('#bPlay').onclick=play;
+$('#bGrammar').onclick=()=>{au();sync();show('grammarMode')};
+$('#bBack').onclick=()=>show('menu');
+$('#bGo').onclick=play;
+$('#bAgain').onclick=play;
+$('#bMenu').onclick=()=>{S=null;show('menu')};
+
+let prevScreen = 'menu';
+function openAnswerKey(fromScreen){
+  prevScreen = fromScreen;
+  show('answerModal');
+}
+$('#bAnsMenu').onclick=()=>openAnswerKey('menu');
+$('#bAnsHud').onclick=()=>{
+  if(S) S.run = false;
+  openAnswerKey('hud');
+};
+$('#bAnsResult').onclick=()=>openAnswerKey('result');
+
+const closeAnswer = ()=>{
+  if(prevScreen === 'hud' && S){
+    S.run = true;
+    show('hud');
+    $('#hud').classList.remove('hidden');
+  } else {
+    show(prevScreen);
+  }
+};
+$('#bCloseAns').onclick = closeAnswer;
+$('#bBackFromAns').onclick = closeAnswer;
+</script>
+</body>
+</html>
